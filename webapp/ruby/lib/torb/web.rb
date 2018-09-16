@@ -4,6 +4,7 @@ require 'erubi'
 require 'mysql2'
 require 'mysql2-cs-bind'
 require 'openssl'
+require "redis"
 
 module Torb
   class Web < Sinatra::Base
@@ -55,6 +56,12 @@ module Torb
         )
       end
 
+      def redis
+        @redis ||= Redis.new(
+          host: '127.0.01', port: 6379
+        )
+      end
+
       def get_events(only_public: true, need_reservasion: true)
         where = only_public ? 'WHERE public_fg = 1' : ''
 
@@ -87,7 +94,12 @@ module Torb
         @reservations[event_id] ||= db.xquery('SELECT sheet_id, reserved_at, user_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
-      def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true)
+      def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true, use_cache: false)
+        if use_cache
+          redis_cache = redis.get("events/#{event_id}")
+          return JSON.parse(redis_cache) if redis_cache
+        end
+
         event = fetch_event_record(event_id)
         return unless event
 
@@ -140,6 +152,8 @@ module Torb
         # TODO: あんま効果なさそうだけど SQL で AS 指定すれば良さそう
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
+
+        redis.set("events/#{event_id}", event.to_json) if need_reservasion
 
         event
       end
@@ -371,7 +385,7 @@ module Torb
 
     get '/api/events/:id' do |event_id|
       user = get_login_user || {}
-      event = get_event(event_id, user['id'])
+      event = get_event(event_id, user['id'], use_cache: true)
       halt_with_error 404, 'not_found' if event.nil? || !event['public']
 
       event = sanitize_event(event)
@@ -410,6 +424,8 @@ module Torb
         end
       end
 
+      redis.set("events/#{event_id}", nil)
+
       status 202
       return { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
     end
@@ -444,6 +460,8 @@ module Torb
         db.query('ROLLBACK')
         halt_with_error
       end
+
+      redis.set("events/#{event_id}", nil)
 
       status 204
     end
