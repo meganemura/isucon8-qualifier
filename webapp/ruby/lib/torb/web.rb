@@ -240,7 +240,7 @@ module Torb
 
     # マイページ
     get '/api/users/:id', login_required: true do |user_id|
-      if user_id != session[:user_id]
+      if user_id != session[:user_id].to_s
         halt_with_error 403, 'forbidden'
       end
       user = db.xquery('SELECT id, nickname FROM users WHERE id = ?', user_id).first
