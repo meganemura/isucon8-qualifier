@@ -58,6 +58,7 @@ module Torb
 
         db.query('BEGIN')
         begin
+          # :udemushi: where けす。, public_fg を where にする, id だけやんけ
           event_ids = db.query('SELECT * FROM events ORDER BY id ASC').select(&where).map { |e| e['id'] }
           events = event_ids.map do |event_id|
             event = get_event(event_id)
