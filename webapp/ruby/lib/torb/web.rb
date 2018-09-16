@@ -56,6 +56,7 @@ module Torb
       def get_events(where = nil)
         where ||= ->(e) { e['public_fg'] }
 
+        # TODO: 更新系処理ないので、TRANSACTION は決して良さそう
         db.query('BEGIN')
         begin
           # :udemushi: where けす。, public_fg を where にする, id だけやんけ
@@ -74,6 +75,7 @@ module Torb
       end
 
       def get_event(event_id, login_user_id = nil)
+        # TODO: LIMIT 1 とか入れてみっぺ
         event = db.xquery('SELECT * FROM events WHERE id = ?', event_id).first
         return unless event
 
@@ -85,10 +87,13 @@ module Torb
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
+        # TODO: これはメモ化できそう
         sheets = db.query('SELECT * FROM sheets ORDER BY `rank`, num')
         sheets.each do |sheet|
           event['sheets'][sheet['rank']]['price'] ||= event['price'] + sheet['price']
+          # TODO: これ sheets の count と同じっぽい
           event['total'] += 1
+          # TODO: これも sheets where rank = X の count と同じっぽい
           event['sheets'][sheet['rank']]['total'] += 1
 
           reservation = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)', event['id'], sheet['id']).first
@@ -103,11 +108,13 @@ module Torb
 
           event['sheets'][sheet['rank']]['detail'].push(sheet)
 
+          # TODO: 以下の処理は不要っぽい
           sheet.delete('id')
           sheet.delete('price')
           sheet.delete('rank')
         end
 
+        # TODO: あんま効果なさそうだけど SQL で AS 指定すれば良さそう
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
 
