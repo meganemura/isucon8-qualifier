@@ -287,13 +287,8 @@ module Torb
 
       user['total_price'] = reservation_master.select { |res| res['canceled_at'].nil? }.map { |res| res['sheet_price'] + res['event_price'] }.inject(:+)
 
-      # MEMO: 遅い
-      # rows = db.xquery('SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5', user['id'])
-      rows = db.xquery('SELECT event_id, canceled_at, reserved_at FROM reservations WHERE user_id = ?', user['id'])
-      # recent_event_ids = rows.sort_by { |row| row['canceled_at'] || row['reserved_at'] }.reverse.map { |row| row['event_id'] }.uniq.slice(0..4)
-      recent_event_ids = rows.group_by { |row| row['event_id'] }.sort_by { |_, events| events.map { |e| e['canceled_at'] || e['reserved_at'] }.max }.map { |r| r[0] }.reverse.uniq.slice(0..4)
+      recent_event_ids = reservation_master.group_by { |row| row['event_id'] }.sort_by { |_, events| events.map { |e| e['canceled_at'] || e['reserved_at'] }.max }.map { |r| r[0] }.reverse.uniq.slice(0..4)
       recent_events = recent_event_ids.map do |event_id|
-        # event = fetch_event(event_id)
         event = if event_cache.key?(event_id)
                   event_cache[event_id].dup
                 else
