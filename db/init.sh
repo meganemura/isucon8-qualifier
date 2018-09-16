@@ -24,5 +24,5 @@ $mysql -uisucon torb -e 'ALTER TABLE reservations DROP KEY event_id_and_sheet_id
 gzip -dc "$DB_DIR/isucon8q-initial-dataset.sql.gz" | $mysql -uisucon torb
 $mysql -uisucon torb -e 'ALTER TABLE reservations ADD KEY event_id_and_sheet_id_idx (event_id, sheet_id)'
 
-$mysql -uisucon torb -e 'update reservations.sheet_rank, reservations.sheet_num, `sheets.rank`  set reservations.sheet_rank = `sheets.rank` where reservations.sheet_id = sheets.id'
-$mysql -uisucon torb -e 'update reservations.event_price, `event.price`  set reservations.event_price = `event.price` where reservations.event_id = events.id'
+$mysql -uisucon torb -e 'update reservations.sheet_rank, reservations.sheet_num, reservations.sheet_price, `sheets.rank`  set reservations.sheet_rank = `sheets.rank`, reservations.sheet_price = sheets.price, reservations.sheet_num = sheets.num  where reservations.sheet_id = sheets.id'
+$mysql -uisucon torb -e 'update reservations.event_price, `event.price`  set reservations.event_price = `events.price` where reservations.event_id = events.id'
