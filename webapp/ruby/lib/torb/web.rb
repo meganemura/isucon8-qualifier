@@ -94,8 +94,8 @@ module Torb
         @reservations[event_id] ||= db.xquery('SELECT sheet_id, reserved_at, user_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
-      def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true)
-        if need_reservasion
+      def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true, use_cache: false)
+        if use_cache
           redis_cache = redis.get("events/#{event_id}")
           return JSON.parse(redis_cache) if redis_cache
         end
@@ -385,7 +385,7 @@ module Torb
 
     get '/api/events/:id' do |event_id|
       user = get_login_user || {}
-      event = get_event(event_id, user['id'])
+      event = get_event(event_id, user['id'], use_cache: true)
       halt_with_error 404, 'not_found' if event.nil? || !event['public']
 
       event = sanitize_event(event)
