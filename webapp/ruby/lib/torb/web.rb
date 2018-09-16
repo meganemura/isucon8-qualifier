@@ -71,6 +71,12 @@ module Torb
         events
       end
 
+      def fetch_reservations(event_id)
+        @reservations ||= {}
+
+        @reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
+      end
+
       def get_event(event_id, login_user_id = nil, sheets: nil)
         event = db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
         return unless event
@@ -83,7 +89,7 @@ module Torb
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
-        master_reservations = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
+        master_reservations = fetch_reservations(event_id)
 
         sheets ||= db.query('SELECT * FROM sheets ORDER BY `rank`, num')
         sheets.each do |master_sheet|
