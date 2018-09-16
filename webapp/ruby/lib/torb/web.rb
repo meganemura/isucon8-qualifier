@@ -212,7 +212,7 @@ module Torb
       end
 
       def render_report_csv(reports)
-        reports = reports.sort_by { |report| report[:sold_at] }
+        # reports = reports.sort_by { |report| report[:sold_at] }
 
         keys = %i[reservation_id event_id rank num price user_id sold_at canceled_at]
         body = keys.join(',')
