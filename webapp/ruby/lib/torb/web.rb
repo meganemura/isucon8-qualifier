@@ -5,13 +5,12 @@ require 'mysql2'
 require 'mysql2-cs-bind'
 require 'openssl'
 
-Bundler.require(ENV["RACK_ENV"])
-
 module Torb
   class Web < Sinatra::Base
     configure :development do
       require 'sinatra/reloader'
       register Sinatra::Reloader
+      require 'pry'
     end
 
     set :root, File.expand_path('../..', __dir__)
