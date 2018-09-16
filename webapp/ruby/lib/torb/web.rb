@@ -96,8 +96,11 @@ module Torb
 
       def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true, use_cache: false)
         if use_cache
-          redis_cache = redis.get("events/#{event_id}")
-          return JSON.parse(redis_cache) if redis_cache
+          begin
+            redis_cache = redis.get("events/#{event_id}")
+            return JSON.parse(redis_cache) if redis_cache
+          rescue
+          end
         end
 
         event = fetch_event_record(event_id)
