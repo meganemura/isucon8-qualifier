@@ -361,9 +361,6 @@ module Torb
       sheet = nil
       reservation_id = nil
       loop do
-        # sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
-
-        # binding.pry
         result = db.xquery('SELECT count(*) as count FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ?', event['id'], rank).first
         count = result['count']
         halt_with_error 409, 'sold_out' if count == 0
