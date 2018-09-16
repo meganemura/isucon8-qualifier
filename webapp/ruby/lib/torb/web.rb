@@ -333,7 +333,7 @@ module Torb
         halt_with_error 409, 'sold_out' unless sheet
         db.query('BEGIN')
         begin
-          db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'))
+          db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
           reservation_id = db.last_id
           db.query('COMMIT')
         rescue => e
@@ -466,7 +466,7 @@ module Torb
     get '/admin/api/reports/events/:id/sales', admin_login_required: true do |event_id|
       event = get_event(event_id)
 
-      reservations = db.xquery('SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE', event['id'])
+      reservations = db.xquery('SELECT r.* FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE', event['id'])
       reports = reservations.map do |reservation|
         {
           reservation_id: reservation['id'],
@@ -487,21 +487,15 @@ module Torb
       query = <<-'EOS'
       SELECT
           r.id AS reservation_id,
-          e.id AS event_id,
-          s.rank,
-          s.num AS num,
-          (e.price + s.price) AS price,
+          r.event_id AS event_id,
+          r.sheet_rank as rank,
+          r.sheet_num as num
+          (r.sheet_price + r.event_price) AS price,
           r.user_id AS user_id,
           DATE_FORMAT(reserved_at,"%Y-%m-%dT%TZ") AS sold_at,
           IF(r.canceled_at != '', DATE_FORMAT(r.canceled_at,"%Y-%m-%dT%TZ"), '') AS canceled_at
       FROM
           reservations r
-          INNER JOIN
-              sheets s
-          ON  s.id = r.sheet_id
-          INNER JOIN
-              events e
-          ON  e.id = r.event_id
       ORDER BY
           sold_at ASC
       FOR UPDATE
