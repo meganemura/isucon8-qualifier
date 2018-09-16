@@ -4,6 +4,10 @@ require 'erubi'
 require 'mysql2'
 require 'mysql2-cs-bind'
 require 'openssl'
+require 'oj'
+require 'oj_mimic_json'
+require './oj_encorder.rb'
+
 
 module Torb
   class Web < Sinatra::Base
@@ -17,6 +21,7 @@ module Torb
     set :sessions, key: 'torb_session', expire_after: 3600
     set :session_secret, 'tagomoris'
     set :protection, frame_options: :deny
+    set :json_encoder, OjEncoder.new
 
     set :erb, escape_html: true
 

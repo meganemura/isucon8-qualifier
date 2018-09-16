@@ -5,6 +5,9 @@ gem 'sinatra'
 gem 'erubi'
 gem 'mysql2'
 gem 'mysql2-cs-bind'
+gem 'oj'
+gem 'oj_mimic_json'
+
 
 group :development do
   gem 'sinatra-contrib'
