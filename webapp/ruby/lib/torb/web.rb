@@ -204,7 +204,7 @@ module Torb
 
     get '/' do
       @user   = get_login_user
-      @events = get_events(need_reservasion: false).map(&method(:sanitize_event))
+      @events = get_events(need_reservasion: true).map(&method(:sanitize_event))
       erb :index
     end
 
@@ -417,7 +417,7 @@ module Torb
 
     get '/admin/' do
       @administrator = get_login_administrator
-      @events = get_events(only_public: false, need_reservasion: false) if @administrator
+      @events = get_events(only_public: false, need_reservasion: true) if @administrator
 
       erb :admin
     end
