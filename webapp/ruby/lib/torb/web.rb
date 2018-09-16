@@ -512,7 +512,19 @@ module Torb
     get '/admin/api/reports/events/:id/sales', admin_login_required: true do |event_id|
       event = get_event(event_id)
 
-      reservations = db.xquery('SELECT r.* FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC', event['id'])
+      query = <<~SQL
+        SELECT r.id,
+         r.sheet_rank,
+         r.sheet_num,
+         r.user_id,
+         DATE_FORMAT(r.reserved_at, '%Y-%m-%dT%TZ') as reserved_at,
+         IF(r.canceled_at != '', DATE_FORMAT(r.canceled_at, '%Y-%m-%dT%TZ'), '') as canceled_at,
+         (r.event_price + r.sheet_price) as price
+         FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC
+      SQL
+
+      reservations = db.xquery(query, event['id'])
+
       reports = reservations.map do |reservation|
         {
           reservation_id: reservation['id'],
@@ -520,9 +532,9 @@ module Torb
           rank:           reservation['sheet_rank'],
           num:            reservation['sheet_num'],
           user_id:        reservation['user_id'],
-          sold_at:        reservation['reserved_at'].iso8601,
-          canceled_at:    reservation['canceled_at']&.iso8601 || '',
-          price:          reservation['event_price'] + reservation['sheet_price'],
+          sold_at:        reservation['reserved_at'],
+          canceled_at:    reservation['canceled_at'],
+          price:          reservation['price']
         }
       end
 
