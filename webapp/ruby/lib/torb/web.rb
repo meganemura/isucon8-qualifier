@@ -518,13 +518,15 @@ module Torb
         halt_with_error 400, 'cannot_close_public_event'
       end
 
-      db.query('BEGIN')
-      begin
-        db.xquery('UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?', public, closed, event['id'])
-        db.query('COMMIT')
-      rescue
-        db.query('ROLLBACK')
-      end
+      # db.query('BEGIN')
+      # begin
+      #   db.xquery('UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?', public, closed, event['id'])
+      #   db.query('COMMIT')
+      # rescue
+      #   db.query('ROLLBACK')
+      # end
+
+      db.xquery('UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?', public, closed, event['id'])
 
       # ここでは最新の情報とするためキャッシュを削除する
       @cached_event_records = {}
