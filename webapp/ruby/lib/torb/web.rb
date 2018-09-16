@@ -4,6 +4,7 @@ require 'erubi'
 require 'mysql2'
 require 'mysql2-cs-bind'
 require 'openssl'
+require "redis"
 
 module Torb
   class Web < Sinatra::Base
@@ -55,6 +56,12 @@ module Torb
         )
       end
 
+      def redis
+        @redis ||= Redis.new(
+          host: '127.0.01', port: 6379
+        )
+      end
+
       def get_events(only_public: true, need_reservasion: true)
         where = only_public ? 'WHERE public_fg = 1' : ''
 
@@ -93,7 +100,8 @@ module Torb
 
         # zero fill
         event['total']   = 0
-        event['remains'] = need_reservasion ? 0 : 1000 - db.xquery('SELECT count(*) AS cnt FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id).first['cnt']
+        # event['remains'] = need_reservasion ? 0 : 1000 - db.xquery('SELECT count(*) AS cnt FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id).first['cnt']
+        event['remains'] = 0
         event['sheets'] = {}
         %w[S A B C].each do |rank|
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
@@ -117,9 +125,9 @@ module Torb
               sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
               sheet['reserved']    = true
               sheet['reserved_at'] = reservation['reserved_at'].to_i
-            else
-              event['remains'] += 1
-              event['sheets'][sheet['rank']]['remains'] += 1
+            # else
+            #   event['remains'] += 1
+            #   event['sheets'][sheet['rank']]['remains'] += 1
             end
           end
 
@@ -130,11 +138,24 @@ module Torb
           sheet.delete('rank')
         end
 
+        reserves = JSON.parse(redis.get("reserves/#{event_id}"))
+        event['remains'] = 1000 - reserves.values.inject(&:+)
+        reserves.each { |rank, count| event['sheets'][rank]['remains'] = sheets_by_rank[rank] - count }
+
         # TODO: あんま効果なさそうだけど SQL で AS 指定すれば良さそう
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
 
         event
+      end
+
+      def sheets_by_rank
+        @sheets_by_rank ||= begin
+          sheets_by_rank = {}
+          rows = db.query('SELECT `rank`, count(`rank`) AS cnt FROM sheets GROUP BY `rank`')
+          rows.each { |row| sheets_by_rank[row['rank']] = row['cnt'] }
+          sheets_by_rank
+        end
       end
 
       def sanitize_event(event)
@@ -210,6 +231,13 @@ module Torb
 
     get '/initialize' do
       system "../../db/init.sh"
+
+      rows = db.query('select event_id, sheet_rank, count(sheet_rank) as cnt from reservations where canceled_at IS NULL group by event_id, sheet_rank order by event_id')
+      rows.group_by { |row| row['event_id'] }.each do |event_id, records|
+        reserves = {}
+        records.each { |record| reserves[record['sheet_rank']] = record['cnt'] }
+        redis.set("reserves/#{event_id}", reserves.to_json)
+      end
 
       status 204
     end
@@ -378,6 +406,10 @@ module Torb
         break
       end
 
+      reservies = JSON.parse(redis.get("reserves/#{event['id']}"))
+      reservies[rank] += 1
+      redis.set("reserves/#{event['id']}", reservies.to_json)
+
       status 202
       { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
     end
@@ -412,6 +444,10 @@ module Torb
         db.query('ROLLBACK')
         halt_with_error
       end
+
+      reservies = JSON.parse(redis.get("reservies/#{event['id']}"))
+      reservies[rank] += 1
+      redis.set("reserves/#{event['id']}", reserves.to_json)
 
       status 204
     end
