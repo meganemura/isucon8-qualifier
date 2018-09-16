@@ -84,7 +84,7 @@ module Torb
       def fetch_reservations(event_id)
         @reservations ||= {}
 
-        @reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
+        @reservations[event_id] ||= db.xquery('SELECT sheet_id, reserved_at, user_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
       def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true)
