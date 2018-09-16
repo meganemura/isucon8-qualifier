@@ -93,7 +93,7 @@ module Torb
 
         # zero fill
         event['total']   = 0
-        event['remains'] = need_reservasion ? 0 : 1000 - db.xquery('SELECT count(*) AS cnt FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id).first['cnt']
+        event['remains'] = 0
         event['sheets'] = {}
         %w[S A B C].each do |rank|
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
