@@ -409,6 +409,7 @@ module Torb
           db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?, ?, ?, ? ,?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
           reservation_id = db.last_id
           db.query('COMMIT')
+          break
         rescue => e
           db.query('ROLLBACK')
           warn "re-try: rollback by #{e}"
