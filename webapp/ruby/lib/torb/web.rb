@@ -91,7 +91,7 @@ module Torb
       def fetch_reservations(event_id)
         @reservations ||= {}
 
-        @reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
+        @reservations[event_id] ||= db.xquery('SELECT sheet_id, reserved_at, user_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
       def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true)
@@ -100,14 +100,13 @@ module Torb
 
         # zero fill
         event['total']   = 0
-        # event['remains'] = need_reservasion ? 0 : 1000 - db.xquery('SELECT count(*) AS cnt FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id).first['cnt']
         event['remains'] = 0
         event['sheets'] = {}
         %w[S A B C].each do |rank|
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
-        master_reservations = fetch_reservations(event_id) if need_reservasion
+        master_reservations = fetch_reservations(event_id).to_a if need_reservasion
 
         sheets ||= db.query('SELECT * FROM sheets ORDER BY `rank`, num')
         sheets.each do |master_sheet|
@@ -125,9 +124,6 @@ module Torb
               sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
               sheet['reserved']    = true
               sheet['reserved_at'] = reservation['reserved_at'].to_i
-            # else
-            #   event['remains'] += 1
-            #   event['sheets'][sheet['rank']]['remains'] += 1
             end
           end
 
@@ -138,15 +134,33 @@ module Torb
           sheet.delete('rank')
         end
 
-        reserves = JSON.parse(redis.get("reserves/#{event_id}"))
-        event['remains'] = 1000 - reserves.values.inject(&:+)
-        reserves.each { |rank, count| event['sheets'][rank]['remains'] = sheets_by_rank[rank] - count }
+        reserves = reserved_sheets_by_event_id[event['id']]
+        event['remains'] = reserves.nil? ? 1000 : 1000 - reserves.values.inject(&:+)
+        %w(S A B C).each do |rank|
+          if reserves.nil?
+            event['sheets'][rank]['remains'] = sheets_by_rank[rank]
+          else
+            event['sheets'][rank]['remains'] = sheets_by_rank[rank] - (reserves[rank] || 0)
+          end
+        end
 
         # TODO: あんま効果なさそうだけど SQL で AS 指定すれば良さそう
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
 
         event
+      end
+
+      def reserved_sheets_by_event_id
+        @reserved_sheets_by_event_id ||= begin
+          rows = db.query('select event_id, sheet_rank, count(sheet_rank) as cnt from reservations where canceled_at IS NULL group by event_id, sheet_rank order by event_id')
+          reserves_by_event = {}
+          rows.group_by { |row| row['event_id'] }.each do |event_id, records|
+            reserves_by_event[event_id] = {}
+            records.each { |record| reserves_by_event[event_id][record['sheet_rank']] = record['cnt'] }
+          end
+          reserves_by_event
+        end
       end
 
       def sheets_by_rank
@@ -225,7 +239,7 @@ module Torb
 
     get '/' do
       @user   = get_login_user
-      @events = get_events(need_reservasion: true).map(&method(:sanitize_event))
+      @events = get_events(need_reservasion: false).map(&method(:sanitize_event))
       erb :index
     end
 
@@ -383,27 +397,31 @@ module Torb
       halt_with_error 400, 'invalid_rank' unless validate_rank(rank)
 
       user  = get_login_user
-      event = get_event(event_id, user['id'])
-      halt_with_error 404, 'invalid_event' unless event && event['public']
+      # event = get_event(event_id, user['id'])
+      event = db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
+      halt_with_error 404, 'invalid_event' unless event && event['public_fg']
 
       sheet = nil
       reservation_id = nil
-      loop do
-        # sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
-        sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ? LIMIT 10', event['id'], rank).to_a.sample
-        halt_with_error 409, 'sold_out' unless sheet
-        db.query('BEGIN')
+
+      reservations = db.xquery('SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL', event['id'])
+      sheets = db.xquery('SELECT * FROM sheets WHERE `rank` = ?', rank)
+
+      remained_sheets = sheets.to_a.map {|x| x['id']} - reservations.map {|x| x['sheet_id']}
+
+      halt_with_error 409, 'sold_out' if remained_sheets.size == 0
+
+      remained_sheets.shuffle!
+
+      remained_sheets.each do |sheet_id|
+        sheet = sheets.find {|x| x['id'] == sheet_id}
         begin
           db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?, ?, ?, ? ,?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
           reservation_id = db.last_id
-          db.query('COMMIT')
+          break
         rescue => e
-          db.query('ROLLBACK')
-          warn "re-try: rollback by #{e}"
           next
         end
-
-        break
       end
 
       reservies = JSON.parse(redis.get("reserves/#{event['id']}"))
@@ -411,7 +429,7 @@ module Torb
       redis.set("reserves/#{event['id']}", reservies.to_json)
 
       status 202
-      { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
+      return { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
     end
 
     delete '/api/events/:id/sheets/:rank/:num/reservation', login_required: true do |event_id, rank, num|
@@ -454,7 +472,7 @@ module Torb
 
     get '/admin/' do
       @administrator = get_login_administrator
-      @events = get_events(only_public: false, need_reservasion: true) if @administrator
+      @events = get_events(only_public: false, need_reservasion: false) if @administrator
 
       erb :admin
     end
@@ -488,14 +506,17 @@ module Torb
       public = body_params['public'] || false
       price  = body_params['price']
 
-      db.query('BEGIN')
-      begin
-        db.xquery('INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)', title, public, price)
-        event_id = db.last_id
-        db.query('COMMIT')
-      rescue
-        db.query('ROLLBACK')
-      end
+      # db.query('BEGIN')
+      # begin
+      #   db.xquery('INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)', title, public, price)
+      #   event_id = db.last_id
+      #   db.query('COMMIT')
+      # rescue
+      #   db.query('ROLLBACK')
+      # end
+
+      db.xquery('INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)', title, public, price)
+      event_id = db.last_id
 
       event = get_event(event_id)
       event&.to_json
@@ -522,13 +543,15 @@ module Torb
         halt_with_error 400, 'cannot_close_public_event'
       end
 
-      db.query('BEGIN')
-      begin
-        db.xquery('UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?', public, closed, event['id'])
-        db.query('COMMIT')
-      rescue
-        db.query('ROLLBACK')
-      end
+      # db.query('BEGIN')
+      # begin
+      #   db.xquery('UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?', public, closed, event['id'])
+      #   db.query('COMMIT')
+      # rescue
+      #   db.query('ROLLBACK')
+      # end
+
+      db.xquery('UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?', public, closed, event['id'])
 
       # ここでは最新の情報とするためキャッシュを削除する
       @cached_event_records = {}
@@ -538,19 +561,31 @@ module Torb
     end
 
     get '/admin/api/reports/events/:id/sales', admin_login_required: true do |event_id|
-      event = get_event(event_id)
+      # event = get_event(event_id)
 
-      reservations = db.xquery('SELECT r.* FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE', event['id'])
+      query = <<~SQL
+        SELECT r.id,
+         r.sheet_rank,
+         r.sheet_num,
+         r.user_id,
+         DATE_FORMAT(r.reserved_at, '%Y-%m-%dT%TZ') as reserved_at,
+         IF(r.canceled_at != '', DATE_FORMAT(r.canceled_at, '%Y-%m-%dT%TZ'), '') as canceled_at,
+         (r.event_price + r.sheet_price) as price
+         FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC
+      SQL
+
+      reservations = db.xquery(query, event_id)
+
       reports = reservations.map do |reservation|
         {
           reservation_id: reservation['id'],
-          event_id:       event['id'],
+          event_id:       event_id,
           rank:           reservation['sheet_rank'],
           num:            reservation['sheet_num'],
           user_id:        reservation['user_id'],
-          sold_at:        reservation['reserved_at'].iso8601,
-          canceled_at:    reservation['canceled_at']&.iso8601 || '',
-          price:          reservation['event_price'] + reservation['sheet_price'],
+          sold_at:        reservation['reserved_at'],
+          canceled_at:    reservation['canceled_at'],
+          price:          reservation['price']
         }
       end
 
@@ -572,7 +607,6 @@ module Torb
           reservations r
       ORDER BY
           sold_at ASC
-      FOR UPDATE
       EOS
       reports = db.query(query)
 
