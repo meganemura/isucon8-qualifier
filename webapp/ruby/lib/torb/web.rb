@@ -340,16 +340,16 @@ module Torb
 
     post '/api/events/:id/actions/reserve', login_required: true do |event_id|
       rank = body_params['sheet_rank']
+      halt_with_error 400, 'invalid_rank' unless validate_rank(rank)
 
       user  = get_login_user
       event = get_event(event_id, user['id'])
       halt_with_error 404, 'invalid_event' unless event && event['public']
-      halt_with_error 400, 'invalid_rank' unless validate_rank(rank)
 
       sheet = nil
       reservation_id = nil
       loop do
-        sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
+        sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
         halt_with_error 409, 'sold_out' unless sheet
         db.query('BEGIN')
         begin
