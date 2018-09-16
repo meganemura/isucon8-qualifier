@@ -125,6 +125,16 @@ module Torb
         sanitized
       end
 
+      # リクエスト内でキャッシュ
+      def fetch_event(event_id)
+        @cached_events = {}
+        return @cached_events[event_id] if @cached_events.key?(event_id)
+
+        get_event(event_id).tap do |x|
+          @cached_events[event_id] = x
+        end
+      end
+
       def get_login_user
         user_id = session[:user_id]
         return unless user_id
@@ -223,7 +233,7 @@ module Torb
       rows = db.xquery(res_query, user['id'])
 
       recent_reservations = rows.map do |row|
-        event = get_event(row['event_id'])
+        event = fetch_event(row['event_id'])
         price = event['sheets'][row['sheet_rank']]['price']
         event.delete('sheets')
         event.delete('total')
@@ -254,7 +264,7 @@ module Torb
 
       rows = db.xquery('SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5', user['id'])
       recent_events = rows.map do |row|
-        event = get_event(row['event_id'])
+        event = fetch_event(row['event_id'])
         event['sheets'].each { |_, sheet| sheet.delete('detail') }
         event
       end
