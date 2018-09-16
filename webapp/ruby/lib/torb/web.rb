@@ -362,8 +362,16 @@ module Torb
       reservation_id = nil
       loop do
         # sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
-        sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ? LIMIT 10', event['id'], rank).to_a.sample
-        halt_with_error 409, 'sold_out' unless sheet
+
+        # binding.pry
+        result = db.xquery('SELECT count(*) as count FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ?', event['id'], rank).first
+        count = result['count']
+        halt_with_error 409, 'sold_out' if count == 0
+
+        offset = [*0...count].sample
+
+        sheet = db.xquery("SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ? LIMIT 1 OFFSET #{offset}", event['id'], rank).first
+
         db.query('BEGIN')
         begin
           db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?, ?, ?, ? ,?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
