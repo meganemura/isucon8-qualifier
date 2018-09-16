@@ -386,15 +386,14 @@ module Torb
       halt_with_error 400, 'invalid_rank' unless validate_rank(rank)
 
       user  = get_login_user
-      event = get_event(event_id, user['id'])
-      halt_with_error 404, 'invalid_event' unless event && event['public']
+      # event = get_event(event_id, user['id'])
+      event = db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
+      halt_with_error 404, 'invalid_event' unless event && event['public_fg']
 
       sheet = nil
       reservation_id = nil
-      loop do
-        # sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
 
-        # binding.pry
+      loop do
         result = db.xquery('SELECT count(*) as count FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ?', event['id'], rank).first
         count = result['count']
         halt_with_error 409, 'sold_out' if count == 0
