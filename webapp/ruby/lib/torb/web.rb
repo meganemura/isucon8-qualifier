@@ -58,12 +58,7 @@ module Torb
       def get_events(only_public: true)
         where = only_public ? 'WHERE public_fg = 1' : ''
         # TODO: できればクエリ一発で引きたい
-        @cached_events = db.query("SELECT * FROM events #{where} ORDER BY id ASC").each_with_object({}) do |event, hash|
-          hash[event['id']] = event
-        end
-
-        event_ids = db.query("SELECT id FROM events #{where} ORDER BY id ASC").map { |e| e['id'] }
-
+        event_ids = db.query("SELECT * FROM events #{where} ORDER BY id ASC").map { |e| e['id'] }
         # sheets はマスタっぽくて使い回せそうなので、そうして見ます
         sheets = db.query('SELECT * FROM sheets ORDER BY `rank`, num')
 
@@ -77,19 +72,13 @@ module Torb
       end
 
       def fetch_reservations(event_id)
-        @cached_reservations ||= {}
+        @reservations ||= {}
 
-        @cached_reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
-      end
-
-      def fetch_event(event_id)
-        @cached_events ||= {}
-
-        @cahed_events[event_id] ||= db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
+        @reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
       def get_event(event_id, login_user_id = nil, sheets: nil)
-        event = fetch_event(event_id)
+        event = db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
         return unless event
 
         # zero fill
