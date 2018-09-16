@@ -493,7 +493,7 @@ module Torb
           r.id AS reservation_id,
           r.event_id AS event_id,
           r.sheet_rank as rank,
-          r.sheet_num as num
+          r.sheet_num as num,
           (r.sheet_price + r.event_price) AS price,
           r.user_id AS user_id,
           DATE_FORMAT(reserved_at,"%Y-%m-%dT%TZ") AS sold_at,
