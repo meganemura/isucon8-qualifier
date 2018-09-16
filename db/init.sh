@@ -27,4 +27,4 @@ $mysql -uisucon torb -e 'ALTER TABLE reservations ADD KEY event_id_and_sheet_id_
 # $mysql -uisucon torb -e 'update reservations as r, sheets as s set r.sheet_rank = s.rank, r.sheet_price = s.price, r.sheet_num = s.num  where r.sheet_id = s.id'
 # $mysql -uisucon torb -e 'update reservations as r, events as e set r.event_price = e.price where r.event_id = e.id'
 
-# redis-cli flushall
+redis-cli flushall
