@@ -95,6 +95,11 @@ module Torb
       end
 
       def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true)
+        if need_reservasion
+          redis_cache = redis.get("events/#{event_id}")
+          return JSON.parse(redis_cache) if redis_cache
+        end
+
         event = fetch_event_record(event_id)
         return unless event
 
@@ -147,6 +152,8 @@ module Torb
         # TODO: あんま効果なさそうだけど SQL で AS 指定すれば良さそう
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
+
+        redis.set("events/#{event_id}", event.to_json) if need_reservasion
 
         event
       end
@@ -417,6 +424,8 @@ module Torb
         end
       end
 
+      redis.set("events/#{event_id}", nil)
+
       status 202
       return { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
     end
@@ -451,6 +460,8 @@ module Torb
         db.query('ROLLBACK')
         halt_with_error
       end
+
+      redis.set("events/#{event_id}", nil)
 
       status 204
     end
