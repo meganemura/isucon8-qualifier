@@ -404,7 +404,7 @@ module Torb
           halt_with_error 403, 'not_permitted'
         end
 
-        db.xquery('UPDATE reservations SET canceled_at = ? WHERE id = ?', Time.now.utc.strftime('%F %T.%6N'), reservation['id'])
+        db.xquery('UPDATE reservations SET canceled_at = NOW() WHERE id = ?', reservation['id'])
         db.query('COMMIT')
       rescue => e
         warn "rollback by: #{e}"
