@@ -117,9 +117,9 @@ module Torb
               sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
               sheet['reserved']    = true
               sheet['reserved_at'] = reservation['reserved_at'].to_i
-            else
-              event['remains'] += 1
-              event['sheets'][sheet['rank']]['remains'] += 1
+            # else
+            #   event['remains'] += 1
+            #   event['sheets'][sheet['rank']]['remains'] += 1
             end
           end
 
@@ -130,11 +130,42 @@ module Torb
           sheet.delete('rank')
         end
 
+        reserves = reserved_sheets_by_event_id[event['id']]
+        event['remains'] = reserves.nil? ? 1000 : 1000 - reserves.values.inject(&:+)
+        %w(S A B C).each do |rank|
+          if reserves.nil?
+            event['sheets'][rank]['remains'] = sheets_by_rank[rank]
+          else
+            event['sheets'][rank]['remains'] = sheets_by_rank[rank] - (reserves[rank] || 0)
+          end
+        end
+
         # TODO: あんま効果なさそうだけど SQL で AS 指定すれば良さそう
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
 
         event
+      end
+
+      def reserved_sheets_by_event_id
+        @reserved_sheets_by_event_id ||= begin
+          rows = db.query('select event_id, sheet_rank, count(sheet_rank) as cnt from reservations where canceled_at IS NULL group by event_id, sheet_rank order by event_id')
+          reserves_by_event = {}
+          rows.group_by { |row| row['event_id'] }.each do |event_id, records|
+            reserves_by_event[event_id] = {}
+            records.each { |record| reserves_by_event[event_id][record['sheet_rank']] = record['cnt'] }
+          end
+          reserves_by_event
+        end
+      end
+
+      def sheets_by_rank
+        @sheets_by_rank ||= begin
+          sheets_by_rank = {}
+          rows = db.query('SELECT `rank`, count(`rank`) AS cnt FROM sheets GROUP BY `rank`')
+          rows.each { |row| sheets_by_rank[row['rank']] = row['cnt'] }
+          sheets_by_rank
+        end
       end
 
       def sanitize_event(event)
@@ -204,7 +235,7 @@ module Torb
 
     get '/' do
       @user   = get_login_user
-      @events = get_events(need_reservasion: true).map(&method(:sanitize_event))
+      @events = get_events(need_reservasion: false).map(&method(:sanitize_event))
       erb :index
     end
 
@@ -451,7 +482,7 @@ module Torb
 
     get '/admin/' do
       @administrator = get_login_administrator
-      @events = get_events(only_public: false, need_reservasion: true) if @administrator
+      @events = get_events(only_public: false, need_reservasion: false) if @administrator
 
       erb :admin
     end
