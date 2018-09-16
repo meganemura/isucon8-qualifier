@@ -512,7 +512,7 @@ module Torb
     get '/admin/api/reports/events/:id/sales', admin_login_required: true do |event_id|
       event = get_event(event_id)
 
-      reservations = db.xquery('SELECT r.* FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE', event['id'])
+      reservations = db.xquery('SELECT r.* FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC', event['id'])
       reports = reservations.map do |reservation|
         {
           reservation_id: reservation['id'],
