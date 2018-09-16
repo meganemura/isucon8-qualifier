@@ -96,6 +96,7 @@ module Torb
           # TODO: これも sheets where rank = X の count と同じっぽい
           event['sheets'][sheet['rank']]['total'] += 1
 
+          # TODO: ここも LIMIT 入れると良さそう
           reservation = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)', event['id'], sheet['id']).first
           if reservation
             sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
@@ -106,9 +107,10 @@ module Torb
             event['sheets'][sheet['rank']]['remains'] += 1
           end
 
+          # TODO: dup した物を積めるようにする
           event['sheets'][sheet['rank']]['detail'].push(sheet)
 
-          # TODO: 以下の処理は不要っぽい
+          # TODO: 以下の処理は dup した後にやる
           sheet.delete('id')
           sheet.delete('price')
           sheet.delete('rank')
