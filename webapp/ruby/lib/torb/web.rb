@@ -135,7 +135,7 @@ module Torb
 
       # リクエスト内でキャッシュ
       def fetch_event(event_id)
-        @cached_events = {}
+        @cached_events ||= {}
         return @cached_events[event_id] if @cached_events.key?(event_id)
 
         get_event(event_id).tap do |x|
