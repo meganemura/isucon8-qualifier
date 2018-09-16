@@ -235,14 +235,27 @@ module Torb
         halt_with_error 403, 'forbidden'
       end
 
-      res_query = <<~SQL
-        SELECT r.*, s.rank AS sheet_rank,
-               s.num AS sheet_num
-        FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id
-        WHERE r.user_id = ?
-        ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5
+      master_query = <<~SQL
+      SELECT
+          r.*,
+          s.rank AS sheet_rank,
+          s.num AS sheet_num,
+          s.price AS sheet_price,
+          e.price AS event_price
+      FROM
+          reservations r
+          INNER JOIN
+              sheets s
+          ON  s.id = r.sheet_id
+          INNER JOIN
+              events e
+          ON  e.id = r.event_id
+      WHERE
+          r.user_id = ?
       SQL
-      rows = db.xquery(res_query, user['id'])
+      reservation_master = db.xquery(master_query, user['id'])
+
+      rows = reservation_master.sort_by { |res| res['canceled_at'] || res['reserved_at'] }.reverse.slice(0..4)
 
       event_cache = {}
 
@@ -272,15 +285,7 @@ module Torb
 
       user['recent_reservations'] = recent_reservations
 
-      price_query = <<~SQL
-        SELECT IFNULL(SUM(e.price + s.price), 0) AS total_price
-        FROM reservations r
-          INNER JOIN sheets s ON s.id = r.sheet_id
-          INNER JOIN events e ON e.id = r.event_id
-        WHERE r.user_id = ? AND r.canceled_at IS NULL
-      SQL
-
-      user['total_price'] = db.xquery(price_query, user['id']).first['total_price']
+      user['total_price'] = reservation_master.select { |res| res['canceled_at'].nil? }.map { |res| res['sheet_price'] + res['event_price'] }.inject(:+)
 
       # MEMO: 遅い
       # rows = db.xquery('SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5', user['id'])
