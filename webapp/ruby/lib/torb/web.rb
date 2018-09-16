@@ -362,28 +362,20 @@ module Torb
       reservation_id = nil
       loop do
         # sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
-        sheets = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ? LIMIT 10', event['id'], rank).to_a
-
-        halt_with_error 409, 'sold_out' unless sheets
-
-        sheets.shuffle.each do |_sheet|
-          sheet = _sheet
-          db.query('BEGIN')
-          begin
-            db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?, ?, ?, ? ,?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
-            reservation_id = db.last_id
-            db.query('COMMIT')
-          rescue => e
-            db.query('ROLLBACK')
-            warn "re-try: rollback by #{e}"
-            sheet = nil
-            next
-          end
-
-          break
+        sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ? LIMIT 10', event['id'], rank).to_a.sample
+        halt_with_error 409, 'sold_out' unless sheet
+        db.query('BEGIN')
+        begin
+          db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?, ?, ?, ? ,?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
+          reservation_id = db.last_id
+          db.query('COMMIT')
+        rescue => e
+          db.query('ROLLBACK')
+          warn "re-try: rollback by #{e}"
+          next
         end
 
-        break if sheet
+        break
       end
 
       status 202
