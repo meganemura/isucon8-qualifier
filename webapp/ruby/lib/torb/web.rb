@@ -476,21 +476,43 @@ module Torb
     end
 
     get '/admin/api/reports/sales', admin_login_required: true do
-      reservations = db.query('SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.id AS event_id, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id ORDER BY reserved_at ASC FOR UPDATE')
-      reports = reservations.map do |reservation|
-        {
-          reservation_id: reservation['id'],
-          event_id:       reservation['event_id'],
-          rank:           reservation['sheet_rank'],
-          num:            reservation['sheet_num'],
-          user_id:        reservation['user_id'],
-          sold_at:        reservation['reserved_at'].iso8601,
-          canceled_at:    reservation['canceled_at']&.iso8601 || '',
-          price:          reservation['event_price'] + reservation['sheet_price'],
-        }
+      query = <<-'EOS'
+      SELECT
+          r.id AS reservation_id,
+          e.id AS event_id,
+          s.rank,
+          s.num AS num,
+          (e.price + s.price) AS price,
+          r.user_id AS user_id,
+          DATE_FORMAT(reserved_at,"%Y-%m-%dT%TZ") AS sold_at,
+          IF(r.canceled_at != '', DATE_FORMAT(r.canceled_at,"%Y-%m-%dT%TZ"), '') AS canceled_at
+      FROM
+          reservations r
+          INNER JOIN
+              sheets s
+          ON  s.id = r.sheet_id
+          INNER JOIN
+              events e
+          ON  e.id = r.event_id
+      ORDER BY
+          sold_at ASC
+      FOR UPDATE
+      EOS
+      reports = db.query(query)
+
+      keys = %i[reservation_id event_id rank num price user_id sold_at canceled_at]
+      body = keys.join(',')
+      body << "\n"
+      reports.each do |report|
+        body << report.values.join(',')
+        body << "\n"
       end
 
-      render_report_csv(reports)
+      headers({
+        'Content-Type'        => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="report.csv"',
+      })
+      body
     end
   end
 end
