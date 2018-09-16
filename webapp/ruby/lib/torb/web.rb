@@ -390,31 +390,28 @@ module Torb
       sheet = nil
       reservation_id = nil
 
-      loop do
-        result = db.xquery('SELECT count(*) as count FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ?', event['id'], rank).first
-        count = result['count']
-        halt_with_error 409, 'sold_out' if count == 0
+      reservations = db.xquery('SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL', event['id'])
+      sheets = db.xquery('SELECT * FROM sheets WHERE `rank` = ?', rank)
 
-        offset = [*0...count].sample
+      remained_sheets = sheets.to_a.map {|x| x['id']} - reservations.map {|x| x['sheet_id']}
 
-        sheet = db.xquery("SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ? LIMIT 1 OFFSET #{offset}", event['id'], rank).first
+      halt_with_error 409, 'sold_out' if remained_sheets.size == 0
 
-        db.query('BEGIN')
+      remained_sheets.shuffle!
+
+      remained_sheets.each do |sheet_id|
+        sheet = sheets.find {|x| x['id'] == sheet_id}
         begin
           db.xquery('INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at, event_price, sheet_rank, sheet_num, sheet_price) VALUES (?, ?, ?, ?, ?, ?, ? ,?)', event['id'], sheet['id'], user['id'], Time.now.utc.strftime('%F %T.%6N'), event['price'], sheet['rank'], sheet['num'], sheet['price'])
           reservation_id = db.last_id
-          db.query('COMMIT')
+          break
         rescue => e
-          db.query('ROLLBACK')
-          warn "re-try: rollback by #{e}"
           next
         end
-
-        break
       end
 
       status 202
-      { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
+      return { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
     end
 
     delete '/api/events/:id/sheets/:rank/:num/reservation', login_required: true do |event_id, rank, num|
