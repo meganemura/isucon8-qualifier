@@ -244,8 +244,16 @@ module Torb
       SQL
       rows = db.xquery(res_query, user['id'])
 
+      event_cache = {}
+
       recent_reservations = rows.map do |row|
-        event = fetch_event(row['event_id'])
+        event = if event_cache.key?(row['event_id'])
+                  event_cache[row['event_id']].dup
+                else
+                  event = fetch_event(row['event_id'])
+                  event_cache[row['event_id']] = event.dup
+                  event
+                end
         price = event['sheets'][row['sheet_rank']]['price']
         event.delete('sheets')
         event.delete('total')
@@ -280,7 +288,14 @@ module Torb
       # recent_event_ids = rows.sort_by { |row| row['canceled_at'] || row['reserved_at'] }.reverse.map { |row| row['event_id'] }.uniq.slice(0..4)
       recent_event_ids = rows.group_by { |row| row['event_id'] }.sort_by { |_, events| events.map { |e| e['canceled_at'] || e['reserved_at'] }.max }.map { |r| r[0] }.reverse.uniq.slice(0..4)
       recent_events = recent_event_ids.map do |event_id|
-        event = fetch_event(event_id)
+        # event = fetch_event(event_id)
+        event = if event_cache.key?(event_id)
+                  event_cache[event_id].dup
+                else
+                  event = fetch_event(event_id)
+                  event_cache[event_id] = event.dup
+                  event
+                end
         event['sheets'].each { |_, sheet| sheet.delete('detail') }
         event
       end
