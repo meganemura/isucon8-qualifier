@@ -383,9 +383,10 @@ module Torb
 
     delete '/api/events/:id/sheets/:rank/:num/reservation', login_required: true do |event_id, rank, num|
       user  = get_login_user
-      event = get_event(event_id, user['id'])
+      # event = get_event(event_id, user['id'])
+      event = db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
 
-      halt_with_error 404, 'invalid_event' unless event && event['public']
+      halt_with_error 404, 'invalid_event' unless event && event['public_fg']
       halt_with_error 404, 'invalid_rank'  unless validate_rank(rank)
 
       sheet = db.xquery('SELECT * FROM sheets WHERE `rank` = ? AND num = ?', rank, num).first
