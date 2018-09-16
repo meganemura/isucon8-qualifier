@@ -275,11 +275,11 @@ module Torb
       user['total_price'] = db.xquery(price_query, user['id']).first['total_price']
 
       # MEMO: 遅い
-      # rows = db.xquery('SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5', user['id'])
-      rows = db.xquery('SELECT event_id, canceled_at, reserved_at FROM reservations WHERE user_id = ?', user['id'])
-      recent_event_ids = rows.sort_by { |row| row['canceled_at'] || row['reserved_at'] }.reverse.map { |row| row['event_id'] }.uniq.slice(0..4)
-      recent_events = recent_event_ids.map do |event_id|
-        event = fetch_event(event_id)
+      rows = db.xquery('SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5', user['id'])
+      # rows = db.xquery('SELECT event_id, canceled_at, reserved_at FROM reservations WHERE user_id = ?', user['id'])
+      # recent_event_ids = rows.sort_by { |row| row['canceled_at'] || row['reserved_at'] }.reverse.map { |row| row['event_id'] }.uniq.slice(0..4)
+      recent_events = rows.map do |event_id|
+        event = fetch_event(event_id['event_id'])
         event['sheets'].each { |_, sheet| sheet.delete('detail') }
         event
       end
