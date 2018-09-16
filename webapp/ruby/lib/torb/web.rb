@@ -81,6 +81,8 @@ module Torb
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
+        master_reservations = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
+
         sheets ||= db.query('SELECT * FROM sheets ORDER BY `rank`, num')
         sheets.each do |master_sheet|
           sheet = master_sheet.dup
@@ -91,8 +93,7 @@ module Torb
           # TODO: これも sheets where rank = X の count と同じっぽい
           event['sheets'][sheet['rank']]['total'] += 1
 
-          # TODO: ここも LIMIT 入れると良さそう
-          reservation = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)', event['id'], sheet['id']).first
+          reservation = master_reservations.select { |r| r['sheet_id'] == sheet['id'] }.sort { |a, b| b['reserved_at'].to_i <=> a['reserved_at'].to_i }.first
           if reservation
             sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
             sheet['reserved']    = true
@@ -102,10 +103,8 @@ module Torb
             event['sheets'][sheet['rank']]['remains'] += 1
           end
 
-          # TODO: dup した物を積めるようにする
           event['sheets'][sheet['rank']]['detail'].push(sheet)
 
-          # TODO: 以下の処理は dup した後にやる
           sheet.delete('id')
           sheet.delete('price')
           sheet.delete('rank')
