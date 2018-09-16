@@ -484,14 +484,17 @@ module Torb
       public = body_params['public'] || false
       price  = body_params['price']
 
-      db.query('BEGIN')
-      begin
-        db.xquery('INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)', title, public, price)
-        event_id = db.last_id
-        db.query('COMMIT')
-      rescue
-        db.query('ROLLBACK')
-      end
+      # db.query('BEGIN')
+      # begin
+      #   db.xquery('INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)', title, public, price)
+      #   event_id = db.last_id
+      #   db.query('COMMIT')
+      # rescue
+      #   db.query('ROLLBACK')
+      # end
+
+      db.xquery('INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)', title, public, price)
+      event_id = db.last_id
 
       event = get_event(event_id)
       event&.to_json
