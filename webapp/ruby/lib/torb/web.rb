@@ -53,22 +53,14 @@ module Torb
         )
       end
 
-      def get_events(where = nil)
-        where ||= ->(e) { e['public_fg'] }
-
-        # TODO: 更新系処理ないので、TRANSACTION は決して良さそう
-        db.query('BEGIN')
-        begin
-          # :udemushi: where けす。, public_fg を where にする, id だけやんけ
-          event_ids = db.query('SELECT * FROM events ORDER BY id ASC').select(&where).map { |e| e['id'] }
-          events = event_ids.map do |event_id|
-            event = get_event(event_id)
-            event['sheets'].each { |sheet| sheet.delete('detail') }
-            event
-          end
-          db.query('COMMIT')
-        rescue
-          db.query('ROLLBACK')
+      def get_events(only_public: true)
+        where = only_public ? 'WHERE public_fg = 1' : ''
+        # TODO: できればクエリ一発で引きたい
+        event_ids = db.query("SELECT * FROM events #{where} ORDER BY id ASC").map { |e| e['id'] }
+        events = event_ids.map do |event_id|
+          event = get_event(event_id)
+          event['sheets'].each { |sheet| sheet.delete('detail') }
+          event
         end
 
         events
@@ -350,7 +342,7 @@ module Torb
 
     get '/admin/' do
       @administrator = get_login_administrator
-      @events = get_events(->(_) { true }) if @administrator
+      @events = get_events(only_public: false) if @administrator
 
       erb :admin
     end
@@ -375,7 +367,7 @@ module Torb
     end
 
     get '/admin/api/events', admin_login_required: true do
-      events = get_events(->(_) { true })
+      events = get_events(only_public: false)
       events.to_json
     end
 
