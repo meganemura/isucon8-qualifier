@@ -190,16 +190,12 @@ module Torb
       def get_login_user
         user_id = session[:user_id]
         return unless user_id
-        user_nickname = session[:user][:nickname]
-        return session[:user] if user_nickname
         db.xquery('SELECT id, nickname FROM users WHERE id = ?', user_id).first
       end
 
       def get_login_administrator
         administrator_id = session['administrator_id']
         return unless administrator_id
-        admin_nickname = session[:administrator][:nickname]
-        return session['administrator'] if admin_nickname
         db.xquery('SELECT id, nickname FROM administrators WHERE id = ?', administrator_id).first
       end
 
@@ -361,17 +357,13 @@ module Torb
       halt_with_error 401, 'authentication_failed' if user.nil? || pass_hash != user['pass_hash']
 
       session['user_id'] = user['id']
-      set_user = {id: user['id'], nickname: user['nickname'] }
-      session['user'] = set_user
 
-      # user = get_login_user
-
-      set_user.to_json
+      user = get_login_user
+      user.to_json
     end
 
     post '/api/actions/logout', login_required: true do
       session.delete('user_id')
-      session.delete('user')
       status 204
     end
 
@@ -479,15 +471,12 @@ module Torb
 
       session['administrator_id'] = administrator['id']
 
-      set_administrator = { id: administrator['id'], nickname: administrator['nickname'] }
-      session['administrator'] = set_administrator
-
-      set_administrator.to_json
+      administrator = get_login_administrator
+      administrator.to_json
     end
 
     post '/admin/api/actions/logout', admin_login_required: true do
       session.delete('administrator_id')
-      session.delete('administrator')
       status 204
     end
 
