@@ -57,9 +57,8 @@ module Torb
 
       def get_events(only_public: true)
         where = only_public ? 'WHERE public_fg = 1' : ''
-
-        # fetch_event_record 用に一括で取得しておく
-        @cached_event_records = db.query("SELECT * FROM events #{where} ORDER BY id ASC").each_with_object({}) do |event, hash|
+        # TODO: できればクエリ一発で引きたい
+        @cached_events = db.query("SELECT * FROM events #{where} ORDER BY id ASC").each_with_object({}) do |event, hash|
           hash[event['id']] = event
         end
 
@@ -83,15 +82,14 @@ module Torb
         @cached_reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
-      # DB のレコードをキャッシュ
-      def fetch_event_record(event_id)
-        @cached_event_records ||= {}
+      def fetch_event(event_id)
+        @cached_events ||= {}
 
-        @cached_event_records[event_id] ||= db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
+        @cahed_events[event_id] ||= db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
       end
 
       def get_event(event_id, login_user_id = nil, sheets: nil)
-        event = fetch_event_record(event_id)
+        event = fetch_event(event_id)
         return unless event
 
         # zero fill
