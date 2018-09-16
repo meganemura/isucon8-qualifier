@@ -159,15 +159,13 @@ module Torb
       def get_login_user
         user_id = session[:user_id]
         return unless user_id
-        session['user']
-        # db.xquery('SELECT id, nickname FROM users WHERE id = ?', user_id).first
+        db.xquery('SELECT id, nickname FROM users WHERE id = ?', user_id).first
       end
 
       def get_login_administrator
         administrator_id = session['administrator_id']
         return unless administrator_id
-        session['administrator']
-        # db.xquery('SELECT id, nickname FROM administrators WHERE id = ?', administrator_id).first
+        db.xquery('SELECT id, nickname FROM administrators WHERE id = ?', administrator_id).first
       end
 
       def validate_rank(rank)
@@ -329,9 +327,6 @@ module Torb
 
       session['user_id'] = user['id']
 
-      user = { id: user['id'], nickname: user['nickname'] } # get_login_administrator
-      session['user'] ={ id: user['id'], nickname: user['nickname'] }
-
       user = get_login_user
       user.to_json
     end
@@ -446,9 +441,7 @@ module Torb
 
       session['administrator_id'] = administrator['id']
 
-      administrator = { id: administrator['id'], nickname: administrator['nickname'] } # get_login_administrator
-      session['administrator'] ={ id: administrator['id'], nickname: administrator['nickname'] }
-
+      administrator = get_login_administrator
       administrator.to_json
     end
 
