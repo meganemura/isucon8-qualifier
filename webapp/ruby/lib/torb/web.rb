@@ -388,7 +388,6 @@ module Torb
       halt_with_error 404, 'invalid_event' unless event && event['public']
       halt_with_error 404, 'invalid_rank'  unless validate_rank(rank)
       halt_with_error 403, 'not_permitted' unless event['mine']
-      halt_with_error 400, 'not_reserved'  unless event['reserved']
 
       sheet = db.xquery('SELECT * FROM sheets WHERE `rank` = ? AND num = ?', rank, num).first
       halt_with_error 404, 'invalid_sheet' unless sheet
@@ -396,11 +395,10 @@ module Torb
       db.query('BEGIN')
       begin
         reservation = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL FOR UPDATE', event['id'], sheet['id']).first
-
-        # unless reservation
-        #   db.query('ROLLBACK')
-        #   halt_with_error 400, 'not_reserved'
-        # end
+        unless reservation
+          db.query('ROLLBACK')
+          halt_with_error 400, 'not_reserved'
+        end
         # if reservation['user_id'] != user['id']
         #   db.query('ROLLBACK')
         #   halt_with_error 403, 'not_permitted'
