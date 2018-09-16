@@ -55,7 +55,7 @@ module Torb
         )
       end
 
-      def get_events(only_public: true)
+      def get_events(only_public: true, need_reservasion: true)
         where = only_public ? 'WHERE public_fg = 1' : ''
 
         @cached_event_records = db.query("SELECT * FROM events #{where} ORDER BY id ASC").each_with_object({}) do |event, hash|
@@ -67,7 +67,7 @@ module Torb
         sheets = db.query('SELECT * FROM sheets ORDER BY `rank`, num')
 
         events = event_ids.map do |event_id|
-          event = get_event(event_id, nil, sheets: sheets)
+          event = get_event(event_id, nil, sheets: sheets, need_reservasion: need_reservasion)
           event['sheets'].each { |sheet| sheet.delete('detail') }
           event
         end
@@ -87,7 +87,7 @@ module Torb
         @reservations[event_id] ||= db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL', event_id)
       end
 
-      def get_event(event_id, login_user_id = nil, sheets: nil)
+      def get_event(event_id, login_user_id = nil, sheets: nil, need_reservasion: true)
         event = fetch_event_record(event_id)
         return unless event
 
@@ -99,7 +99,7 @@ module Torb
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
-        master_reservations = fetch_reservations(event_id)
+        master_reservations = fetch_reservations(event_id) if need_reservasion
 
         sheets ||= db.query('SELECT * FROM sheets ORDER BY `rank`, num')
         sheets.each do |master_sheet|
@@ -111,14 +111,16 @@ module Torb
           # TODO: これも sheets where rank = X の count と同じっぽい
           event['sheets'][sheet['rank']]['total'] += 1
 
-          reservation = master_reservations.select { |r| r['sheet_id'] == sheet['id'] }.sort { |a, b| b['reserved_at'].to_i <=> a['reserved_at'].to_i }.first
-          if reservation
-            sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
-            sheet['reserved']    = true
-            sheet['reserved_at'] = reservation['reserved_at'].to_i
-          else
-            event['remains'] += 1
-            event['sheets'][sheet['rank']]['remains'] += 1
+          if need_reservasion
+            reservation = master_reservations.select { |r| r['sheet_id'] == sheet['id'] }.sort { |a, b| b['reserved_at'].to_i <=> a['reserved_at'].to_i }.first
+            if reservation
+              sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
+              sheet['reserved']    = true
+              sheet['reserved_at'] = reservation['reserved_at'].to_i
+            else
+              event['remains'] += 1
+              event['sheets'][sheet['rank']]['remains'] += 1
+            end
           end
 
           event['sheets'][sheet['rank']]['detail'].push(sheet)
@@ -202,7 +204,7 @@ module Torb
 
     get '/' do
       @user   = get_login_user
-      @events = get_events.map(&method(:sanitize_event))
+      @events = get_events(need_reservasion: false).map(&method(:sanitize_event))
       erb :index
     end
 
@@ -415,7 +417,7 @@ module Torb
 
     get '/admin/' do
       @administrator = get_login_administrator
-      @events = get_events(only_public: false) if @administrator
+      @events = get_events(only_public: false, need_reservasion: false) if @administrator
 
       erb :admin
     end
