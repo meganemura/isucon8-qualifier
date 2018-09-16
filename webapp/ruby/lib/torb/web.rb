@@ -246,13 +246,6 @@ module Torb
     get '/initialize' do
       system "../../db/init.sh"
 
-      rows = db.query('select event_id, sheet_rank, count(sheet_rank) as cnt from reservations where canceled_at IS NULL group by event_id, sheet_rank order by event_id')
-      rows.group_by { |row| row['event_id'] }.each do |event_id, records|
-        reserves = {}
-        records.each { |record| reserves[record['sheet_rank']] = record['cnt'] }
-        redis.set("reserves/#{event_id}", reserves.to_json)
-      end
-
       status 204
     end
 
@@ -424,10 +417,6 @@ module Torb
         end
       end
 
-      reservies = JSON.parse(redis.get("reserves/#{event['id']}"))
-      reservies[rank] += 1
-      redis.set("reserves/#{event['id']}", reservies.to_json)
-
       status 202
       return { id: reservation_id, sheet_rank: rank, sheet_num: sheet['num'] } .to_json
     end
@@ -462,10 +451,6 @@ module Torb
         db.query('ROLLBACK')
         halt_with_error
       end
-
-      reservies = JSON.parse(redis.get("reservies/#{event['id']}"))
-      reservies[rank] += 1
-      redis.set("reserves/#{event['id']}", reserves.to_json)
 
       status 204
     end
