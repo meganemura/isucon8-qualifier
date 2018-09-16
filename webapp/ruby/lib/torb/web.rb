@@ -184,7 +184,7 @@ module Torb
       end
 
       def render_report_csv(reports)
-        # reports = reports.sort_by { |report| report[:sold_at] }
+        reports = reports.sort_by { |report| report[:sold_at] }
 
         keys = %i[reservation_id event_id rank num price user_id sold_at canceled_at]
         body = keys.join(',')
@@ -360,9 +360,10 @@ module Torb
 
       sheet = nil
       reservation_id = nil
-
       loop do
+        # sheet = db.xquery('SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1', event['id'], rank).first
 
+        # binding.pry
         result = db.xquery('SELECT count(*) as count FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL AND reserved_at IS NOT NULL) AND `rank` = ?', event['id'], rank).first
         count = result['count']
         halt_with_error 409, 'sold_out' if count == 0
@@ -512,34 +513,32 @@ module Torb
       # event = get_event(event_id)
 
       query = <<~SQL
-        SELECT r.id as reservation_id,
-         ? AS event_id,
-         r.sheet_rank as rank,
-         r.sheet_num AS num,
-         r.user_id AS user_id,
+        SELECT r.id,
+         r.sheet_rank,
+         r.sheet_num,
+         r.user_id,
          DATE_FORMAT(r.reserved_at, '%Y-%m-%dT%TZ') as reserved_at,
          IF(r.canceled_at != '', DATE_FORMAT(r.canceled_at, '%Y-%m-%dT%TZ'), '') as canceled_at,
          (r.event_price + r.sheet_price) as price
          FROM reservations r WHERE r.event_id = ? ORDER BY reserved_at ASC
       SQL
 
-      reservations = db.xquery(query, event_id, event_id)
-      render_report_csv(reservations.to_a)
+      reservations = db.xquery(query, event_id)
 
-      # reports = reservations.map do |reservation|
-      #   {
-      #     reservation_id: reservation['id'],
-      #     event_id:       event_id,
-      #     rank:           reservation['sheet_rank'],
-      #     num:            reservation['sheet_num'],
-      #     user_id:        reservation['user_id'],
-      #     sold_at:        reservation['reserved_at'],
-      #     canceled_at:    reservation['canceled_at'],
-      #     price:          reservation['price']
-      #   }
-      # end
+      reports = reservations.map do |reservation|
+        {
+          reservation_id: reservation['id'],
+          event_id:       event_id,
+          rank:           reservation['sheet_rank'],
+          num:            reservation['sheet_num'],
+          user_id:        reservation['user_id'],
+          sold_at:        reservation['reserved_at'],
+          canceled_at:    reservation['canceled_at'],
+          price:          reservation['price']
+        }
+      end
 
-      # render_report_csv(reports)
+      render_report_csv(reports)
     end
 
     get '/admin/api/reports/sales', admin_login_required: true do
