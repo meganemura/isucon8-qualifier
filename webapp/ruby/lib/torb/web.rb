@@ -99,7 +99,7 @@ module Torb
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
-        master_reservations = fetch_reservations(event_id) if need_reservasion
+        master_reservations = fetch_reservations(event_id).to_a if need_reservasion
 
         sheets ||= db.query('SELECT * FROM sheets ORDER BY `rank`, num')
         sheets.each do |master_sheet|
@@ -117,9 +117,6 @@ module Torb
               sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
               sheet['reserved']    = true
               sheet['reserved_at'] = reservation['reserved_at'].to_i
-            # else
-            #   event['remains'] += 1
-            #   event['sheets'][sheet['rank']]['remains'] += 1
             end
           end
 
