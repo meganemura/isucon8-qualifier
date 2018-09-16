@@ -544,7 +544,6 @@ module Torb
           reservations r
       ORDER BY
           sold_at ASC
-      FOR UPDATE
       EOS
       reports = db.query(query)
 
