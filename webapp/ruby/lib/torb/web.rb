@@ -57,8 +57,11 @@ module Torb
         where = only_public ? 'WHERE public_fg = 1' : ''
         # TODO: できればクエリ一発で引きたい
         event_ids = db.query("SELECT * FROM events #{where} ORDER BY id ASC").map { |e| e['id'] }
+        # sheets はマスタっぽくて使い回せそうなので、そうして見ます
+        sheets = db.query('SELECT * FROM sheets ORDER BY `rank`, num')
+
         events = event_ids.map do |event_id|
-          event = get_event(event_id)
+          event = get_event(event_id, nil, sheets: sheets)
           event['sheets'].each { |sheet| sheet.delete('detail') }
           event
         end
@@ -66,9 +69,8 @@ module Torb
         events
       end
 
-      def get_event(event_id, login_user_id = nil)
-        # TODO: LIMIT 1 とか入れてみっぺ
-        event = db.xquery('SELECT * FROM events WHERE id = ?', event_id).first
+      def get_event(event_id, login_user_id = nil, sheets: nil)
+        event = db.xquery('SELECT * FROM events WHERE id = ? LIMIT 1', event_id).first
         return unless event
 
         # zero fill
@@ -79,9 +81,10 @@ module Torb
           event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
         end
 
-        # TODO: これはメモ化できそう
-        sheets = db.query('SELECT * FROM sheets ORDER BY `rank`, num')
-        sheets.each do |sheet|
+        sheets ||= db.query('SELECT * FROM sheets ORDER BY `rank`, num')
+        sheets.each do |master_sheet|
+          sheet = master_sheet.dup
+
           event['sheets'][sheet['rank']]['price'] ||= event['price'] + sheet['price']
           # TODO: これ sheets の count と同じっぽい
           event['total'] += 1
