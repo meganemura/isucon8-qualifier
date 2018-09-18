@@ -15,6 +15,7 @@ module Torb
     end
 
     set :root, File.expand_path('../..', __dir__)
+    set :environment, :production
     set :sessions, key: 'torb_session', expire_after: 3600
     set :session_secret, 'tagomoris'
     set :protection, frame_options: :deny
