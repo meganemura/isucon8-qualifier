@@ -201,13 +201,21 @@ module Torb
       def get_login_user
         user_id = session[:user_id]
         return unless user_id
-        db.xquery('SELECT id, nickname FROM users WHERE id = ?', user_id).first
+        unless session['user']
+          user = db.xquery('SELECT id, nickname FROM users WHERE id = ?', user_id).first
+          session['user'] = user
+        end
+        session['user']
       end
 
       def get_login_administrator
         administrator_id = session['administrator_id']
         return unless administrator_id
-        db.xquery('SELECT id, nickname FROM administrators WHERE id = ?', administrator_id).first
+        unless session['admin']
+          admin = db.xquery('SELECT id, nickname FROM administrators WHERE id = ?', administrator_id).first
+          session['admin'] = admin
+        end
+        session['admin']
       end
 
       def validate_rank(rank)
@@ -369,12 +377,14 @@ module Torb
 
       session['user_id'] = user['id']
 
-      user = get_login_user
+      user = uesr.delete('login_name')
+      user = uesr.delete('pass_hash')
       user.to_json
     end
 
     post '/api/actions/logout', login_required: true do
       session.delete('user_id')
+      session.delete('user')
       status 204
     end
 
@@ -483,12 +493,15 @@ module Torb
 
       session['administrator_id'] = administrator['id']
 
-      administrator = get_login_administrator
+      # administrator = get_login_administrator
+      administrator.delete('login_name')
+      administrator.delete('pass_hash')
       administrator.to_json
     end
 
     post '/admin/api/actions/logout', admin_login_required: true do
       session.delete('administrator_id')
+      session.delete('admin')
       status 204
     end
 
